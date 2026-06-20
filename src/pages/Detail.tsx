@@ -22,6 +22,7 @@ import StatusBadge from '@/components/StatusBadge';
 type QueryType = 'area' | 'component' | 'sensor';
 type MetricType = 'settlement' | 'lateral' | 'inclination';
 type ViewMode = 'single' | 'compare';
+type CompareType = 'area' | 'sensor';
 
 export default function Detail() {
   const location = useLocation();
@@ -48,6 +49,8 @@ export default function Detail() {
     end: string;
   } | null>(null);
   const [compareAreaIds, setCompareAreaIds] = useState<string[]>([]);
+  const [compareSensorIds, setCompareSensorIds] = useState<string[]>([]);
+  const [compareType, setCompareType] = useState<CompareType>('area');
   const [showComparePanel, setShowComparePanel] = useState(false);
 
   useEffect(() => {
@@ -203,6 +206,27 @@ export default function Detail() {
     return areas.filter((a) => a.buildingId === currentArea.buildingId && a.id !== currentArea.id).slice(0, 10);
   }, [areas, currentArea]);
 
+  const sameAreaSensors = useMemo(() => {
+    if (!currentArea) return [];
+    return sensors.filter((s) => s.areaId === currentArea.id);
+  }, [sensors, currentArea]);
+
+  const sameBuildingSensors = useMemo(() => {
+    if (!currentArea) return [];
+    return sensors.filter((s) => s.buildingId === currentArea.buildingId && s.areaId !== currentArea.id).slice(0, 20);
+  }, [sensors, currentArea]);
+
+  const compareSensors = useMemo(() => {
+    return sensors.filter((s) => compareSensorIds.includes(s.id));
+  }, [sensors, compareSensorIds]);
+
+  const currentBaseSensor = useMemo(() => {
+    if (compareType === 'sensor' && currentArea) {
+      return sameAreaSensors.find((s) => s.type === selectedMetric) || sameAreaSensors[0];
+    }
+    return null;
+  }, [compareType, currentArea, sameAreaSensors, selectedMetric]);
+
   const metricConfig = {
     settlement: { label: '立杆沉降', unit: 'mm', data: trendData.settlement },
     lateral: { label: '模板侧移', unit: 'mm', data: trendData.lateral },
@@ -255,16 +279,19 @@ export default function Detail() {
       return;
     }
     
+    if (queryType === 'sensor') {
+      const sensor = sensors.find((s) => s.id === value);
+      if (sensor) {
+        setSelectedMetric(sensor.type);
+      }
+    }
+    
     setAppliedQuery({
       type: queryType,
       value,
       start: dateRange.start,
       end: dateRange.end,
     });
-
-    if (queryType === 'sensor' && currentSensor) {
-      setSelectedMetric(currentSensor.type);
-    }
   };
 
   const handleAddRecord = (alarmId?: string) => {
@@ -304,6 +331,18 @@ export default function Detail() {
         return [...prev.slice(1), areaId];
       }
       return [...prev, areaId];
+    });
+  };
+
+  const toggleCompareSensor = (sensorId: string) => {
+    setCompareSensorIds((prev) => {
+      if (prev.includes(sensorId)) {
+        return prev.filter((id) => id !== sensorId);
+      }
+      if (prev.length >= 5) {
+        return [...prev.slice(1), sensorId];
+      }
+      return [...prev, sensorId];
     });
   };
 
@@ -868,15 +907,50 @@ export default function Detail() {
         <div className="space-y-6">
           <div className="cockpit-card p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-cockpit-text flex items-center gap-2">
-                <GitCompare className="w-5 h-5 text-accent-blue" />
-                对比分析
-                {compareAreaIds.length > 0 && (
-                  <span className="text-sm font-normal text-cockpit-muted">
-                    (已选 {compareAreaIds.length + 1} 个对象)
-                  </span>
-                )}
-              </h3>
+              <div className="flex items-center gap-4">
+                <h3 className="text-lg font-bold text-cockpit-text flex items-center gap-2">
+                  <GitCompare className="w-5 h-5 text-accent-blue" />
+                  对比分析
+                  {compareType === 'area' && compareAreaIds.length > 0 && (
+                    <span className="text-sm font-normal text-cockpit-muted">
+                      (已选 {compareAreaIds.length + 1} 个对象)
+                    </span>
+                  )}
+                  {compareType === 'sensor' && compareSensorIds.length > 0 && (
+                    <span className="text-sm font-normal text-cockpit-muted">
+                      (已选 {compareSensorIds.length + 1} 个对象)
+                    </span>
+                  )}
+                </h3>
+                <div className="flex rounded-lg bg-cockpit-bg3 p-1">
+                  <button
+                    onClick={() => {
+                      setCompareType('area');
+                      setCompareSensorIds([]);
+                    }}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      compareType === 'area'
+                        ? 'bg-accent-blue text-white'
+                        : 'text-cockpit-muted hover:text-cockpit-text'
+                    }`}
+                  >
+                    按浇筑面
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCompareType('sensor');
+                      setCompareAreaIds([]);
+                    }}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      compareType === 'sensor'
+                        ? 'bg-accent-blue text-white'
+                        : 'text-cockpit-muted hover:text-cockpit-text'
+                    }`}
+                  >
+                    按传感器
+                  </button>
+                </div>
+              </div>
               <button
                 onClick={() => setShowComparePanel(!showComparePanel)}
                 className="flex items-center gap-2 text-sm text-accent-blue hover:underline"
@@ -888,178 +962,372 @@ export default function Detail() {
 
             {showComparePanel && (
               <div className="mb-4 p-4 bg-cockpit-bg3/30 rounded-lg">
-                <div className="text-sm text-cockpit-muted mb-3">
-                  同楼栋其他浇筑面 (最多对比5个):
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {sameBuildingAreas.map((area) => (
-                    <button
-                      key={area.id}
-                      onClick={() => toggleCompareArea(area.id)}
-                      className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
-                        compareAreaIds.includes(area.id)
-                          ? 'bg-accent-blue text-white'
-                          : 'bg-cockpit-bg3 text-cockpit-muted hover:text-cockpit-text'
-                      }`}
-                    >
-                      {area.floor}层 {area.axis}
-                    </button>
-                  ))}
-                </div>
+                {compareType === 'area' ? (
+                  <>
+                    <div className="text-sm text-cockpit-muted mb-3">
+                      同楼栋其他浇筑面 (最多对比5个):
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {sameBuildingAreas.map((area) => (
+                        <button
+                          key={area.id}
+                          onClick={() => toggleCompareArea(area.id)}
+                          className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                            compareAreaIds.includes(area.id)
+                              ? 'bg-accent-blue text-white'
+                              : 'bg-cockpit-bg3 text-cockpit-muted hover:text-cockpit-text'
+                          }`}
+                        >
+                          {area.floor}层 {area.axis}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <div className="text-sm text-cockpit-muted mb-2">
+                        本浇筑面传感器:
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {sameAreaSensors.map((sensor) => (
+                          <button
+                            key={sensor.id}
+                            onClick={() => toggleCompareSensor(sensor.id)}
+                            className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                              compareSensorIds.includes(sensor.id) || sensor.id === currentBaseSensor?.id
+                                ? 'bg-accent-blue text-white'
+                                : 'bg-cockpit-bg3 text-cockpit-muted hover:text-cockpit-text'
+                            }`}
+                          >
+                            {sensor.name.split('-')[0]}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="text-sm text-cockpit-muted mb-2">
+                        同楼栋其他传感器 (最多对比5个):
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {sameBuildingSensors.map((sensor) => (
+                          <button
+                            key={sensor.id}
+                            onClick={() => toggleCompareSensor(sensor.id)}
+                            className={`px-3 py-1.5 text-sm rounded-lg transition-all ${
+                              compareSensorIds.includes(sensor.id)
+                                ? 'bg-accent-blue text-white'
+                                : 'bg-cockpit-bg3 text-cockpit-muted hover:text-cockpit-text'
+                            }`}
+                          >
+                            {sensor.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  viewMode === 'compare'
-                    ? 'border-accent-blue bg-accent-blue/10'
-                    : 'border-transparent bg-cockpit-bg3/50'
-                }`}
-              >
-                <div className="text-xs text-cockpit-muted mb-1">基准对象</div>
-                <div className="text-sm font-medium text-cockpit-text">
-                  {currentArea?.floor}层 {currentArea?.axis}
-                </div>
-              </div>
-              {compareAreas.map((area) => (
-                <div
-                  key={area.id}
-                  className="p-4 rounded-lg bg-cockpit-bg3/50 border border-cockpit-border/50"
-                >
-                  <div className="text-xs text-cockpit-muted mb-1">对比对象</div>
-                  <div className="text-sm font-medium text-cockpit-text flex items-center justify-between">
-                    <span>{area.floor}层 {area.axis}</span>
-                    <button
-                      onClick={() => toggleCompareArea(area.id)}
-                      className="text-cockpit-muted hover:text-risk-alarm text-xs"
+            {compareType === 'area' ? (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      viewMode === 'compare'
+                        ? 'border-accent-blue bg-accent-blue/10'
+                        : 'border-transparent bg-cockpit-bg3/50'
+                    }`}
+                  >
+                    <div className="text-xs text-cockpit-muted mb-1">基准对象</div>
+                    <div className="text-sm font-medium text-cockpit-text">
+                      {currentArea?.floor}层 {currentArea?.axis}
+                    </div>
+                  </div>
+                  {compareAreas.map((area) => (
+                    <div
+                      key={area.id}
+                      className="p-4 rounded-lg bg-cockpit-bg3/50 border border-cockpit-border/50"
                     >
-                      移除
-                    </button>
-                  </div>
+                      <div className="text-xs text-cockpit-muted mb-1">对比对象</div>
+                      <div className="text-sm font-medium text-cockpit-text flex items-center justify-between">
+                        <span>{area.floor}层 {area.axis}</span>
+                        <button
+                          onClick={() => toggleCompareArea(area.id)}
+                          className="text-cockpit-muted hover:text-risk-alarm text-xs"
+                        >
+                          移除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            <div className="space-y-6">
-              {(['settlement', 'lateral', 'inclination'] as MetricType[]).map((metric) => {
-                const metricLabel = metric === 'settlement' ? '立杆沉降' : metric === 'lateral' ? '模板侧移' : '架体倾斜';
-                const metricUnit = metric === 'inclination' ? '°' : 'mm';
-                
-                const mainData = currentArea 
-                  ? (metric === 'settlement' ? getSettlementTrend(currentArea.id) 
-                    : metric === 'lateral' ? getLateralTrend(currentArea.id) 
-                    : getInclinationTrend(currentArea.id))
-                  : [];
-                
-                const compareDatasets = compareAreas.map((area) => ({
-                  name: `${area.floor}层 ${area.axis}`,
-                  data: metric === 'settlement' ? getSettlementTrend(area.id) 
-                    : metric === 'lateral' ? getLateralTrend(area.id) 
-                    : getInclinationTrend(area.id),
-                }));
+                <div className="space-y-6">
+                  {(['settlement', 'lateral', 'inclination'] as MetricType[]).map((metric) => {
+                    const metricLabel = metric === 'settlement' ? '立杆沉降' : metric === 'lateral' ? '模板侧移' : '架体倾斜';
+                    const metricUnit = metric === 'inclination' ? '°' : 'mm';
+                    
+                    const mainData = currentArea 
+                      ? (metric === 'settlement' ? getSettlementTrend(currentArea.id) 
+                        : metric === 'lateral' ? getLateralTrend(currentArea.id) 
+                        : getInclinationTrend(currentArea.id))
+                      : [];
+                    
+                    const compareDatasets = compareAreas.map((area) => ({
+                      name: `${area.floor}层 ${area.axis}`,
+                      data: metric === 'settlement' ? getSettlementTrend(area.id) 
+                        : metric === 'lateral' ? getLateralTrend(area.id) 
+                        : getInclinationTrend(area.id),
+                    }));
 
-                return (
-                  <div key={metric} className="cockpit-card p-4">
-                    <h4 className="font-medium text-cockpit-text mb-3">{metricLabel} 对比</h4>
-                    <div className="h-64">
-                      <TrendChart
-                        data={mainData}
-                        title=""
-                        unit={metricUnit}
-                        warningThreshold={DEFAULT_THRESHOLDS[metric].warning}
-                        alarmThreshold={DEFAULT_THRESHOLDS[metric].alarm}
-                        level="normal"
-                        height={240}
-                        compareData={compareDatasets}
-                      />
+                    return (
+                      <div key={metric} className="cockpit-card p-4">
+                        <h4 className="font-medium text-cockpit-text mb-3">{metricLabel} 对比</h4>
+                        <div className="h-64">
+                          <TrendChart
+                            data={mainData}
+                            title=""
+                            unit={metricUnit}
+                            warningThreshold={DEFAULT_THRESHOLDS[metric].warning}
+                            alarmThreshold={DEFAULT_THRESHOLDS[metric].alarm}
+                            level="normal"
+                            height={240}
+                            compareData={compareDatasets}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 grid grid-cols-3 gap-4">
+                  <div className="cockpit-card p-4">
+                    <h4 className="text-sm font-medium text-cockpit-text mb-3">阈值占比对比</h4>
+                    <div className="space-y-3">
+                      {currentArea && (
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-accent-blue font-medium">基准对象</span>
+                            <span className="text-cockpit-text">
+                              {((currentArea.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-accent-blue rounded-full"
+                              style={{ width: `${Math.min(100, (currentArea.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {compareAreas.map((area) => (
+                        <div key={area.id}>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
+                            <span className="text-cockpit-text">
+                              {((area.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                area.status === 'alarm' ? 'bg-risk-alarm' : area.status === 'warning' ? 'bg-risk-warning' : 'bg-risk-normal'
+                              }`}
+                              style={{ width: `${Math.min(100, (area.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-4">
-              <div className="cockpit-card p-4">
-                <h4 className="text-sm font-medium text-cockpit-text mb-3">阈值占比对比</h4>
-                <div className="space-y-3">
-                  {currentArea && (
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-accent-blue font-medium">基准对象</span>
-                        <span className="text-cockpit-text">
-                          {((currentArea.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100).toFixed(0)}%
-                        </span>
+                  <div className="cockpit-card p-4">
+                    <h4 className="text-sm font-medium text-cockpit-text mb-3">峰值对比</h4>
+                    <div className="space-y-2 text-sm">
+                      {currentArea && (
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-cockpit-muted">基准对象</span>
+                          <span className="text-accent-blue font-medium">{currentArea.settlement.toFixed(1)} mm</span>
+                        </div>
+                      )}
+                      {compareAreas.map((area) => (
+                        <div key={area.id} className="flex justify-between items-center py-1">
+                          <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
+                          <span className={`font-medium ${
+                            area.status === 'alarm' ? 'text-risk-alarm' : area.status === 'warning' ? 'text-risk-warning' : 'text-risk-normal'
+                          }`}>
+                            {area.settlement.toFixed(1)} mm
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="cockpit-card p-4">
+                    <h4 className="text-sm font-medium text-cockpit-text mb-3">风险状态</h4>
+                    <div className="space-y-2 text-sm">
+                      {currentArea && (
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-cockpit-muted">基准对象</span>
+                          <StatusBadge level={currentArea.status} size="sm" />
+                        </div>
+                      )}
+                      {compareAreas.map((area) => (
+                        <div key={area.id} className="flex justify-between items-center py-1">
+                          <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
+                          <StatusBadge level={area.status} size="sm" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-4 mb-6">
+                  <div
+                    className={`p-4 rounded-lg border-2 transition-all ${
+                      viewMode === 'compare'
+                        ? 'border-accent-blue bg-accent-blue/10'
+                        : 'border-transparent bg-cockpit-bg3/50'
+                    }`}
+                  >
+                    <div className="text-xs text-cockpit-muted mb-1">基准对象</div>
+                    <div className="text-sm font-medium text-cockpit-text">
+                      {currentBaseSensor?.name || '-'}
+                    </div>
+                  </div>
+                  {compareSensors.map((sensor) => (
+                    <div
+                      key={sensor.id}
+                      className="p-4 rounded-lg bg-cockpit-bg3/50 border border-cockpit-border/50"
+                    >
+                      <div className="text-xs text-cockpit-muted mb-1">对比对象</div>
+                      <div className="text-sm font-medium text-cockpit-text flex items-center justify-between">
+                        <span className="truncate">{sensor.name}</span>
+                        <button
+                          onClick={() => toggleCompareSensor(sensor.id)}
+                          className="text-cockpit-muted hover:text-risk-alarm text-xs ml-2 flex-shrink-0"
+                        >
+                          移除
+                        </button>
                       </div>
-                      <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-accent-blue rounded-full"
-                          style={{ width: `${Math.min(100, (currentArea.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100)}%` }}
+                    </div>
+                  ))}
+                </div>
+
+                {currentBaseSensor && (
+                  <>
+                    <div className="cockpit-card p-4">
+                      <h4 className="font-medium text-cockpit-text mb-3">
+                        {currentBaseSensor.type === 'settlement' ? '立杆沉降' : 
+                         currentBaseSensor.type === 'lateral' ? '模板侧移' : '架体倾斜'} 曲线对比
+                      </h4>
+                      <div className="h-72">
+                        <TrendChart
+                          data={getSensorTrend(currentBaseSensor.id)}
+                          title=""
+                          unit={currentBaseSensor.type === 'inclination' ? '°' : 'mm'}
+                          warningThreshold={DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].warning}
+                          alarmThreshold={DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm}
+                          level="normal"
+                          height={280}
+                          compareData={compareSensors.map((sensor) => ({
+                            name: sensor.name,
+                            data: getSensorTrend(sensor.id),
+                          }))}
                         />
                       </div>
                     </div>
-                  )}
-                  {compareAreas.map((area) => (
-                    <div key={area.id}>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
-                        <span className="text-cockpit-text">
-                          {((area.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            area.status === 'alarm' ? 'bg-risk-alarm' : area.status === 'warning' ? 'bg-risk-warning' : 'bg-risk-normal'
-                          }`}
-                          style={{ width: `${Math.min(100, (area.settlement / DEFAULT_THRESHOLDS.settlement.alarm) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              <div className="cockpit-card p-4">
-                <h4 className="text-sm font-medium text-cockpit-text mb-3">峰值对比</h4>
-                <div className="space-y-2 text-sm">
-                  {currentArea && (
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-cockpit-muted">基准对象</span>
-                      <span className="text-accent-blue font-medium">{currentArea.settlement.toFixed(1)} mm</span>
-                    </div>
-                  )}
-                  {compareAreas.map((area) => (
-                    <div key={area.id} className="flex justify-between items-center py-1">
-                      <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
-                      <span className={`font-medium ${
-                        area.status === 'alarm' ? 'text-risk-alarm' : area.status === 'warning' ? 'text-risk-warning' : 'text-risk-normal'
-                      }`}>
-                        {area.settlement.toFixed(1)} mm
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="mt-6 grid grid-cols-2 gap-4">
+                      <div className="cockpit-card p-4">
+                        <h4 className="text-sm font-medium text-cockpit-text mb-3">阈值占比对比</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-accent-blue font-medium">{currentBaseSensor.name}</span>
+                              <span className="text-cockpit-text">
+                                {(() => {
+                                  const data = getSensorTrend(currentBaseSensor.id);
+                                  const peak = getPeakValue(data);
+                                  const threshold = DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm;
+                                  return ((peak / threshold) * 100).toFixed(0) + '%';
+                                })()}
+                              </span>
+                            </div>
+                            <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-accent-blue rounded-full"
+                                style={{ 
+                                  width: `${(() => {
+                                    const data = getSensorTrend(currentBaseSensor.id);
+                                    const peak = getPeakValue(data);
+                                    const threshold = DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm;
+                                    return Math.min(100, (peak / threshold) * 100);
+                                  })()}%` 
+                                }}
+                              />
+                            </div>
+                          </div>
+                          {compareSensors.map((sensor) => {
+                            const data = getSensorTrend(sensor.id);
+                            const peak = getPeakValue(data);
+                            const threshold = DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type].alarm;
+                            const level = getRiskLevel(peak, DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type]);
+                            return (
+                              <div key={sensor.id}>
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-cockpit-muted">{sensor.name}</span>
+                                  <span className="text-cockpit-text">
+                                    {((peak / threshold) * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                                <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
+                                  <div
+                                    className={`h-full rounded-full ${
+                                      level === 'alarm' ? 'bg-risk-alarm' : level === 'warning' ? 'bg-risk-warning' : 'bg-risk-normal'
+                                    }`}
+                                    style={{ width: `${Math.min(100, (peak / threshold) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-              <div className="cockpit-card p-4">
-                <h4 className="text-sm font-medium text-cockpit-text mb-3">风险状态</h4>
-                <div className="space-y-2 text-sm">
-                  {currentArea && (
-                    <div className="flex justify-between items-center py-1">
-                      <span className="text-cockpit-muted">基准对象</span>
-                      <StatusBadge level={currentArea.status} size="sm" />
+                      <div className="cockpit-card p-4">
+                        <h4 className="text-sm font-medium text-cockpit-text mb-3">峰值对比</h4>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between items-center py-1">
+                            <span className="text-cockpit-muted">{currentBaseSensor.name}</span>
+                            <span className="text-accent-blue font-medium">
+                              {getPeakValue(getSensorTrend(currentBaseSensor.id)).toFixed(currentBaseSensor.type === 'inclination' ? 2 : 1)} {currentBaseSensor.type === 'inclination' ? '°' : 'mm'}
+                            </span>
+                          </div>
+                          {compareSensors.map((sensor) => {
+                            const peak = getPeakValue(getSensorTrend(sensor.id));
+                            const data = getSensorTrend(sensor.id);
+                            const level = getRiskLevel(peak, DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type]);
+                            return (
+                              <div key={sensor.id} className="flex justify-between items-center py-1">
+                                <span className="text-cockpit-muted">{sensor.name}</span>
+                                <span className={`font-medium ${
+                                  level === 'alarm' ? 'text-risk-alarm' : level === 'warning' ? 'text-risk-warning' : 'text-risk-normal'
+                                }`}>
+                                  {peak.toFixed(sensor.type === 'inclination' ? 2 : 1)} {sensor.type === 'inclination' ? '°' : 'mm'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                  {compareAreas.map((area) => (
-                    <div key={area.id} className="flex justify-between items-center py-1">
-                      <span className="text-cockpit-muted">{area.floor}层 {area.axis}</span>
-                      <StatusBadge level={area.status} size="sm" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

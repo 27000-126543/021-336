@@ -65,8 +65,21 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
   }, [areaAlarms]);
 
   const isClosedLoop = useMemo(() => {
-    return areaRecords.some((r) => r.status === 'completed');
-  }, [areaRecords]);
+    const hasCompletedRecord = areaRecords.some((r) => r.status === 'completed');
+    const allAlarmsClosed = areaAlarms.length === 0 || areaAlarms.every((a) => a.isClosed);
+    return hasCompletedRecord && allAlarmsClosed;
+  }, [areaRecords, areaAlarms]);
+
+  const loopStatusText = useMemo(() => {
+    if (areaAlarms.length === 0 && areaRecords.length === 0) return '未开始';
+    if (unclosedAlarms.length > 0) {
+      if (areaRecords.length > 0) return '处理中';
+      return '未闭环';
+    }
+    if (isClosedLoop) return '已闭环';
+    if (areaRecords.length > 0) return '处理中';
+    return '未闭环';
+  }, [areaAlarms, areaRecords, unclosedAlarms, isClosedLoop]);
 
   const formatTime = (iso: string) => {
     const date = new Date(iso);
@@ -164,28 +177,34 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
 
       <div className="relative w-full max-w-6xl max-h-[90vh] overflow-hidden cockpit-card animate-slide-up">
         <div className="flex items-center justify-between p-5 border-b border-cockpit-border/50">
-          <div className="flex items-center gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-cockpit-text flex items-center gap-3">
-                {building.name} {area.floor}层 {area.axis}
-                <StatusBadge level={area.status} size="md" />
-                {isClosedLoop && (
-                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-risk-normal/20 text-risk-normal text-xs font-medium">
-                    <CheckCircle2 className="w-3 h-3" />
-                    已闭环
+            <div className="flex items-center gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-cockpit-text flex items-center gap-3">
+                  {building.name} {area.floor}层 {area.axis}
+                  <StatusBadge level={area.status} size="md" />
+                  <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    loopStatusText === '已闭环' 
+                      ? 'bg-risk-normal/20 text-risk-normal'
+                      : loopStatusText === '处理中'
+                        ? 'bg-accent-blue/20 text-accent-blue'
+                        : loopStatusText === '未开始'
+                          ? 'bg-cockpit-bg3 text-cockpit-muted'
+                          : 'bg-risk-warning/20 text-risk-warning'
+                  }`}>
+                    {loopStatusText === '已闭环' && <CheckCircle2 className="w-3 h-3" />}
+                    {loopStatusText}
                   </span>
-                )}
-              </h2>
-              <p className="text-sm text-cockpit-muted mt-1 flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5" />
-                数据更新时间: {formatTime(area.updateTime)}
-                <span className="mx-2">|</span>
-                <span className="text-risk-alarm">
-                  未闭环报警: {unclosedAlarms.length} 条
-                </span>
-              </p>
+                </h2>
+                <p className="text-sm text-cockpit-muted mt-1 flex items-center gap-2">
+                  <Clock className="w-3.5 h-3.5" />
+                  数据更新时间: {formatTime(area.updateTime)}
+                  <span className="mx-2">|</span>
+                  <span className={unclosedAlarms.length > 0 ? 'text-risk-alarm' : 'text-risk-normal'}>
+                    未闭环报警: {unclosedAlarms.length} 条
+                  </span>
+                </p>
+              </div>
             </div>
-          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowQuickRecord(true)}
@@ -267,10 +286,21 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                 <div className="cockpit-card p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-cockpit-muted">闭环状态</span>
-                    <CheckCircle2 className={`w-4 h-4 ${isClosedLoop ? 'text-risk-normal' : 'text-cockpit-muted/40'}`} />
+                    {loopStatusText === '已闭环' && <CheckCircle2 className="w-4 h-4 text-risk-normal" />}
+                    {loopStatusText === '处理中' && <Clock className="w-4 h-4 text-accent-blue" />}
+                    {loopStatusText === '未闭环' && <AlertCircle className="w-4 h-4 text-risk-warning" />}
+                    {loopStatusText === '未开始' && <Clock className="w-4 h-4 text-cockpit-muted/40" />}
                   </div>
-                  <div className={`text-2xl font-bold font-display ${isClosedLoop ? 'text-risk-normal' : 'text-risk-warning'}`}>
-                    {isClosedLoop ? '已闭环' : '未闭环'}
+                  <div className={`text-2xl font-bold font-display ${
+                    loopStatusText === '已闭环' 
+                      ? 'text-risk-normal' 
+                      : loopStatusText === '处理中'
+                        ? 'text-accent-blue'
+                        : loopStatusText === '未开始'
+                          ? 'text-cockpit-muted'
+                          : 'text-risk-warning'
+                  }`}>
+                    {loopStatusText}
                   </div>
                 </div>
               </div>

@@ -74,12 +74,7 @@ export default function Records() {
   }, [records, statusFilter, buildingFilter, searchQuery, dateFilter]);
 
   const weeklyReportData = useMemo(() => {
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - 7);
-    weekStart.setHours(0, 0, 0, 0);
-
-    const weekRecords = records.filter((r) => new Date(r.createTime) >= weekStart);
+    const sourceRecords = filteredRecords.length > 0 ? filteredRecords : records;
     
     const byBuilding: Record<string, { total: number; pending: number; reviewing: number; completed: number; alarm: number; warning: number }> = {};
     let totalPending = 0;
@@ -88,7 +83,7 @@ export default function Records() {
     let totalAlarms = 0;
     let totalWarnings = 0;
 
-    weekRecords.forEach((r) => {
+    sourceRecords.forEach((r) => {
       if (!byBuilding[r.buildingName]) {
         byBuilding[r.buildingName] = { total: 0, pending: 0, reviewing: 0, completed: 0, alarm: 0, warning: 0 };
       }
@@ -100,21 +95,21 @@ export default function Records() {
       if (r.riskLevel === 'warning') { byBuilding[r.buildingName].warning++; totalWarnings++; }
     });
 
-    const unclosedRecords = weekRecords.filter((r) => r.status !== 'completed');
+    const unclosedRecords = sourceRecords.filter((r) => r.status !== 'completed');
 
     return {
-      weekRecords,
+      weekRecords: sourceRecords,
       byBuilding,
-      totalRecords: weekRecords.length,
+      totalRecords: sourceRecords.length,
       totalPending,
       totalReviewing,
       totalCompleted,
       totalAlarms,
       totalWarnings,
       unclosedRecords,
-      completionRate: weekRecords.length > 0 ? ((totalCompleted / weekRecords.length) * 100).toFixed(1) : '0',
+      completionRate: sourceRecords.length > 0 ? ((totalCompleted / sourceRecords.length) * 100).toFixed(1) : '0',
     };
-  }, [records]);
+  }, [filteredRecords, records]);
 
   const statusLabels: Record<string, string> = {
     all: '全部',
@@ -184,18 +179,33 @@ export default function Records() {
     setSelectedRecord(record);
     setShowReviewModal(true);
     setReviewConclusion('');
+    if (record.recoveryTime) {
+      setFormData((prev) => ({ ...prev, recoveryTime: record.recoveryTime!.slice(0, 16) }));
+    } else {
+      setFormData((prev) => ({ ...prev, recoveryTime: '' }));
+    }
   };
 
   const handleCompleteReview = () => {
     if (selectedRecord && reviewConclusion) {
+      let finalRecoveryTime: string;
+      if (formData.recoveryTime) {
+        finalRecoveryTime = new Date(formData.recoveryTime).toISOString();
+      } else if (selectedRecord.recoveryTime) {
+        finalRecoveryTime = selectedRecord.recoveryTime;
+      } else {
+        finalRecoveryTime = new Date().toISOString();
+      }
+      
       updateRecord(selectedRecord.id, {
         status: 'completed',
         reviewTime: new Date().toISOString(),
-        recoveryTime: formData.recoveryTime || new Date().toISOString(),
+        recoveryTime: finalRecoveryTime,
         reviewConclusion,
       });
       setShowReviewModal(false);
       setSelectedRecord(null);
+      setFormData((prev) => ({ ...prev, recoveryTime: '' }));
     }
   };
 
@@ -838,7 +848,13 @@ export default function Records() {
               <div className="text-center pb-4 border-b border-cockpit-border/50">
                 <h3 className="text-2xl font-bold text-cockpit-text font-display">高支模监测风险处置周报</h3>
                 <p className="text-cockpit-muted text-sm mt-2">
-                  统计周期: 最近7天 ({formatDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())} - {formatDate(new Date().toISOString())})
+                  统计周期: {dateFilter.start || '不限'} - {dateFilter.end || '不限'}
+                  {buildingFilter !== 'all' && ` | 楼栋: ${buildingFilter}`}
+                  {statusFilter !== 'all' && ` | 状态: ${statusLabels[statusFilter]}`}
+                  {searchQuery && ` | 搜索: ${searchQuery}`}
+                </p>
+                <p className="text-xs text-cockpit-muted/60 mt-1">
+                  * 预览内容与页面筛选条件一致
                 </p>
               </div>
 

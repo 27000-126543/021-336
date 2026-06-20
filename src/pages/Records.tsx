@@ -9,6 +9,7 @@ import { useMonitorStore } from '@/store/useStore';
 import type { DisposalRecord, RiskLevel } from '@/types';
 import StatusBadge from '@/components/StatusBadge';
 import { getRiskBgClass } from '@/utils/riskCalculator';
+import { exportToCSV } from '@/utils/exportCsv';
 
 export default function Records() {
   const location = useLocation();
@@ -74,7 +75,7 @@ export default function Records() {
   }, [records, statusFilter, buildingFilter, searchQuery, dateFilter]);
 
   const weeklyReportData = useMemo(() => {
-    const sourceRecords = filteredRecords.length > 0 ? filteredRecords : records;
+    const sourceRecords = filteredRecords;
     
     const byBuilding: Record<string, { total: number; pending: number; reviewing: number; completed: number; alarm: number; warning: number }> = {};
     let totalPending = 0;
@@ -974,7 +975,36 @@ export default function Records() {
                 </button>
                 <button
                   onClick={() => {
-                    alert('导出功能开发中，将导出为Excel格式');
+                    if (weeklyReportData.weekRecords.length === 0) {
+                      alert('当前筛选条件下没有可导出的记录');
+                      return;
+                    }
+                    
+                    const exportData = weeklyReportData.weekRecords.map((r) => ({
+                      楼栋: r.buildingName,
+                      楼层: `${r.floor}层`,
+                      轴线: r.axis,
+                      风险等级: r.riskLevel === 'alarm' ? '报警' : '预警',
+                      状态: r.status === 'pending' ? '待处理' : r.status === 'reviewing' ? '复核中' : '已完成',
+                      问题描述: r.issueDescription,
+                      整改措施: r.rectificationMeasures || '',
+                      责任人: r.personInCharge,
+                      复核人: r.reviewer || '',
+                      创建时间: new Date(r.createTime).toLocaleString('zh-CN'),
+                      复核时间: r.reviewTime ? new Date(r.reviewTime).toLocaleString('zh-CN') : '',
+                      恢复时间: r.recoveryTime ? new Date(r.recoveryTime).toLocaleString('zh-CN') : '',
+                      复核结论: r.reviewConclusion || '',
+                    }));
+                    
+                    const dateStr = new Date().toISOString().slice(0, 10);
+                    const buildingStr = buildingFilter !== 'all' ? `_${buildingFilter}` : '';
+                    const statusStr = statusFilter !== 'all' ? `_${statusLabels[statusFilter]}` : '';
+                    
+                    exportToCSV(
+                      exportData,
+                      `高支模风险处置周报_${dateStr}${buildingStr}${statusStr}`,
+                      Object.keys(exportData[0]).map((key) => ({ key, label: key }))
+                    );
                   }}
                   className="flex items-center gap-2 px-5 py-2 bg-accent-blue hover:bg-accent-blue/80 text-white rounded-lg font-medium transition-colors"
                 >

@@ -65,15 +65,31 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
   }, [areaAlarms]);
 
   const isClosedLoop = useMemo(() => {
-    const hasCompletedRecord = areaRecords.some((r) => r.status === 'completed');
-    const allAlarmsClosed = areaAlarms.length === 0 || areaAlarms.every((a) => a.isClosed);
-    return hasCompletedRecord && allAlarmsClosed;
-  }, [areaRecords, areaAlarms]);
+    if (areaAlarms.length === 0) {
+      return areaRecords.some((r) => r.status === 'completed');
+    }
+    const allAlarmsHaveCompletedRecord = unclosedAlarms.every((alarm) => {
+      if (alarm.recordId) {
+        const linkedRecord = areaRecords.find((r) => r.id === alarm.recordId);
+        return linkedRecord?.status === 'completed';
+      }
+      return areaRecords.some((r) => r.status === 'completed');
+    });
+    return allAlarmsHaveCompletedRecord;
+  }, [areaRecords, areaAlarms, unclosedAlarms]);
 
   const loopStatusText = useMemo(() => {
     if (areaAlarms.length === 0 && areaRecords.length === 0) return '未开始';
     if (unclosedAlarms.length > 0) {
-      if (areaRecords.length > 0) return '处理中';
+      const hasLinkedPendingOrReviewing = unclosedAlarms.some((alarm) => {
+        if (alarm.recordId) {
+          const linked = areaRecords.find((r) => r.id === alarm.recordId);
+          return linked && (linked.status === 'pending' || linked.status === 'reviewing');
+        }
+        return areaRecords.length > 0;
+      });
+      if (hasLinkedPendingOrReviewing) return '处理中';
+      if (areaRecords.length > 0) return '已关联';
       return '未闭环';
     }
     if (isClosedLoop) return '已闭环';
@@ -187,9 +203,11 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                       ? 'bg-risk-normal/20 text-risk-normal'
                       : loopStatusText === '处理中'
                         ? 'bg-accent-blue/20 text-accent-blue'
-                        : loopStatusText === '未开始'
-                          ? 'bg-cockpit-bg3 text-cockpit-muted'
-                          : 'bg-risk-warning/20 text-risk-warning'
+                        : loopStatusText === '已关联'
+                          ? 'bg-accent-blue/20 text-accent-blue'
+                          : loopStatusText === '未开始'
+                            ? 'bg-cockpit-bg3 text-cockpit-muted'
+                            : 'bg-risk-warning/20 text-risk-warning'
                   }`}>
                     {loopStatusText === '已闭环' && <CheckCircle2 className="w-3 h-3" />}
                     {loopStatusText}
@@ -287,14 +305,14 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-cockpit-muted">闭环状态</span>
                     {loopStatusText === '已闭环' && <CheckCircle2 className="w-4 h-4 text-risk-normal" />}
-                    {loopStatusText === '处理中' && <Clock className="w-4 h-4 text-accent-blue" />}
+                    {(loopStatusText === '处理中' || loopStatusText === '已关联') && <Clock className="w-4 h-4 text-accent-blue" />}
                     {loopStatusText === '未闭环' && <AlertCircle className="w-4 h-4 text-risk-warning" />}
                     {loopStatusText === '未开始' && <Clock className="w-4 h-4 text-cockpit-muted/40" />}
                   </div>
                   <div className={`text-2xl font-bold font-display ${
                     loopStatusText === '已闭环' 
                       ? 'text-risk-normal' 
-                      : loopStatusText === '处理中'
+                      : loopStatusText === '处理中' || loopStatusText === '已关联'
                         ? 'text-accent-blue'
                         : loopStatusText === '未开始'
                           ? 'text-cockpit-muted'

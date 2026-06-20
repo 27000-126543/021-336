@@ -621,7 +621,10 @@ export default function Detail() {
               </div>
 
               <div className="flex gap-2 mb-6">
-                {(Object.keys(metricConfig) as Array<keyof typeof metricConfig>).map((key) => (
+                {((queryType === 'sensor' && currentSensor)
+                  ? [currentSensor.type]
+                  : (Object.keys(metricConfig) as Array<keyof typeof metricConfig>)
+                ).map((key) => (
                   <button
                     key={key}
                     onClick={() => setSelectedMetric(key)}
@@ -636,7 +639,7 @@ export default function Detail() {
                 ))}
               </div>
 
-              {analysis && (
+              {analysis ? (
                 <>
                   <div className="grid grid-cols-4 gap-4 mb-6">
                     <div className="cockpit-card p-4">
@@ -745,10 +748,15 @@ export default function Detail() {
                     height={300}
                   />
                 </>
+              ) : (
+                <div className="text-center py-12">
+                  <Search className="w-12 h-12 text-cockpit-muted/30 mx-auto mb-3" />
+                  <p className="text-cockpit-muted">请选择有效的查询条件</p>
+                </div>
               )}
             </div>
 
-            {analysis && (
+            {analysis ? (
               <div
                 className={`cockpit-card p-5 border-l-4 ${getRiskBgClass(analysis.level)}`}
                 style={{
@@ -781,7 +789,7 @@ export default function Detail() {
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           <div className="space-y-6">
@@ -1184,148 +1192,142 @@ export default function Detail() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div
-                    className={`p-4 rounded-lg border-2 transition-all ${
-                      viewMode === 'compare'
-                        ? 'border-accent-blue bg-accent-blue/10'
-                        : 'border-transparent bg-cockpit-bg3/50'
-                    }`}
-                  >
-                    <div className="text-xs text-cockpit-muted mb-1">基准对象</div>
-                    <div className="text-sm font-medium text-cockpit-text">
-                      {currentBaseSensor?.name || '-'}
-                    </div>
-                  </div>
-                  {compareSensors.map((sensor) => (
-                    <div
-                      key={sensor.id}
-                      className="p-4 rounded-lg bg-cockpit-bg3/50 border border-cockpit-border/50"
-                    >
-                      <div className="text-xs text-cockpit-muted mb-1">对比对象</div>
-                      <div className="text-sm font-medium text-cockpit-text flex items-center justify-between">
-                        <span className="truncate">{sensor.name}</span>
+                <div className="mb-6 p-4 bg-cockpit-bg3/30 rounded-lg">
+                  <div className="text-sm text-cockpit-muted mb-3">已选传感器 ({compareSensorIds.length + 1} 个):</div>
+                  <div className="flex flex-wrap gap-2">
+                    {currentBaseSensor && (
+                      <span className="px-3 py-1.5 text-sm rounded-lg bg-accent-blue text-white flex items-center gap-2">
+                        {currentBaseSensor.name}
+                        <span className="text-xs opacity-70">
+                          [{currentBaseSensor.type === 'settlement' ? '沉降' : currentBaseSensor.type === 'lateral' ? '侧移' : '倾斜'}]
+                        </span>
+                      </span>
+                    )}
+                    {compareSensors.map((sensor) => (
+                      <span
+                        key={sensor.id}
+                        className="px-3 py-1.5 text-sm rounded-lg bg-cockpit-bg3 text-cockpit-text flex items-center gap-2"
+                      >
+                        {sensor.name}
+                        <span className="text-xs text-cockpit-muted">
+                          [{sensor.type === 'settlement' ? '沉降' : sensor.type === 'lateral' ? '侧移' : '倾斜'}]
+                        </span>
                         <button
                           onClick={() => toggleCompareSensor(sensor.id)}
-                          className="text-cockpit-muted hover:text-risk-alarm text-xs ml-2 flex-shrink-0"
+                          className="text-cockpit-muted hover:text-risk-alarm text-xs ml-1"
                         >
-                          移除
+                          ✕
                         </button>
-                      </div>
-                    </div>
-                  ))}
+                      </span>
+                    ))}
+                  </div>
                 </div>
 
-                {currentBaseSensor && (
-                  <>
-                    <div className="cockpit-card p-4">
-                      <h4 className="font-medium text-cockpit-text mb-3">
-                        {currentBaseSensor.type === 'settlement' ? '立杆沉降' : 
-                         currentBaseSensor.type === 'lateral' ? '模板侧移' : '架体倾斜'} 曲线对比
-                      </h4>
-                      <div className="h-72">
-                        <TrendChart
-                          data={getSensorTrend(currentBaseSensor.id)}
-                          title=""
-                          unit={currentBaseSensor.type === 'inclination' ? '°' : 'mm'}
-                          warningThreshold={DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].warning}
-                          alarmThreshold={DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm}
-                          level="normal"
-                          height={280}
-                          compareData={compareSensors.map((sensor) => ({
-                            name: sensor.name,
-                            data: getSensorTrend(sensor.id),
-                          }))}
-                        />
-                      </div>
-                    </div>
+                {(['settlement', 'lateral', 'inclination'] as MetricType[]).map((metricType) => {
+                  const metricLabel = metricType === 'settlement' ? '立杆沉降' : metricType === 'lateral' ? '模板侧移' : '架体倾斜';
+                  const metricUnit = metricType === 'inclination' ? '°' : 'mm';
+                  const thresholdConfig = DEFAULT_THRESHOLDS[metricType];
 
-                    <div className="mt-6 grid grid-cols-2 gap-4">
+                  const allSensors = [
+                    ...(currentBaseSensor ? [currentBaseSensor] : []),
+                    ...compareSensors,
+                  ];
+                  const typedSensors = allSensors.filter((s) => s.type === metricType);
+
+                  if (typedSensors.length === 0) return null;
+
+                  const baseTypedSensor = typedSensors[0];
+                  const compareTypedSensors = typedSensors.slice(1);
+
+                  return (
+                    <div key={metricType} className="space-y-4 mb-6">
                       <div className="cockpit-card p-4">
-                        <h4 className="text-sm font-medium text-cockpit-text mb-3">阈值占比对比</h4>
-                        <div className="space-y-3">
-                          <div>
-                            <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="text-accent-blue font-medium">{currentBaseSensor.name}</span>
-                              <span className="text-cockpit-text">
-                                {(() => {
-                                  const data = getSensorTrend(currentBaseSensor.id);
-                                  const peak = getPeakValue(data);
-                                  const threshold = DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm;
-                                  return ((peak / threshold) * 100).toFixed(0) + '%';
-                                })()}
-                              </span>
-                            </div>
-                            <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-accent-blue rounded-full"
-                                style={{ 
-                                  width: `${(() => {
-                                    const data = getSensorTrend(currentBaseSensor.id);
-                                    const peak = getPeakValue(data);
-                                    const threshold = DEFAULT_THRESHOLDS[currentBaseSensor.type === 'inclination' ? 'inclination' : currentBaseSensor.type].alarm;
-                                    return Math.min(100, (peak / threshold) * 100);
-                                  })()}%` 
-                                }}
-                              />
-                            </div>
+                        <h4 className="font-medium text-cockpit-text mb-3 flex items-center gap-2">
+                          {metricLabel}
+                          <span className="text-xs font-normal text-cockpit-muted">
+                            (单位: {metricUnit}，预警: {thresholdConfig.warning}，报警: {thresholdConfig.alarm})
+                          </span>
+                        </h4>
+                        <div className="h-64">
+                          <TrendChart
+                            data={getSensorTrend(baseTypedSensor.id)}
+                            title=""
+                            unit={metricUnit}
+                            warningThreshold={thresholdConfig.warning}
+                            alarmThreshold={thresholdConfig.alarm}
+                            level="normal"
+                            height={240}
+                            compareData={compareTypedSensors.map((sensor) => ({
+                              name: sensor.name,
+                              data: getSensorTrend(sensor.id),
+                            }))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="cockpit-card p-4">
+                          <h4 className="text-sm font-medium text-cockpit-text mb-3">阈值占比对比 ({metricLabel})</h4>
+                          <div className="space-y-3">
+                            {typedSensors.map((sensor, idx) => {
+                              const data = getSensorTrend(sensor.id);
+                              const peak = getPeakValue(data);
+                              const level = getRiskLevel(peak, thresholdConfig);
+                              const isBase = idx === 0;
+                              return (
+                                <div key={sensor.id}>
+                                  <div className="flex items-center justify-between text-xs mb-1">
+                                    <span className={isBase ? 'text-accent-blue font-medium' : 'text-cockpit-muted'}>
+                                      {sensor.name}
+                                      {isBase && ' (基准)'}
+                                    </span>
+                                    <span className="text-cockpit-text">
+                                      {((peak / thresholdConfig.alarm) * 100).toFixed(0)}%
+                                    </span>
+                                  </div>
+                                  <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${
+                                        isBase ? 'bg-accent-blue' :
+                                        level === 'alarm' ? 'bg-risk-alarm' : level === 'warning' ? 'bg-risk-warning' : 'bg-risk-normal'
+                                      }`}
+                                      style={{ width: `${Math.min(100, (peak / thresholdConfig.alarm) * 100)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                          {compareSensors.map((sensor) => {
-                            const data = getSensorTrend(sensor.id);
-                            const peak = getPeakValue(data);
-                            const threshold = DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type].alarm;
-                            const level = getRiskLevel(peak, DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type]);
-                            return (
-                              <div key={sensor.id}>
-                                <div className="flex items-center justify-between text-xs mb-1">
-                                  <span className="text-cockpit-muted">{sensor.name}</span>
-                                  <span className="text-cockpit-text">
-                                    {((peak / threshold) * 100).toFixed(0)}%
+                        </div>
+
+                        <div className="cockpit-card p-4">
+                          <h4 className="text-sm font-medium text-cockpit-text mb-3">峰值对比 ({metricLabel})</h4>
+                          <div className="space-y-2 text-sm">
+                            {typedSensors.map((sensor, idx) => {
+                              const peak = getPeakValue(getSensorTrend(sensor.id));
+                              const level = getRiskLevel(peak, thresholdConfig);
+                              const isBase = idx === 0;
+                              return (
+                                <div key={sensor.id} className="flex justify-between items-center py-1">
+                                  <span className={isBase ? 'text-accent-blue font-medium' : 'text-cockpit-muted'}>
+                                    {sensor.name}
+                                    {isBase && ' (基准)'}
+                                  </span>
+                                  <span className={`font-medium ${
+                                    isBase ? 'text-accent-blue' :
+                                    level === 'alarm' ? 'text-risk-alarm' : level === 'warning' ? 'text-risk-warning' : 'text-risk-normal'
+                                  }`}>
+                                    {peak.toFixed(metricType === 'inclination' ? 2 : 1)} {metricUnit}
                                   </span>
                                 </div>
-                                <div className="h-2 bg-cockpit-bg3 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full ${
-                                      level === 'alarm' ? 'bg-risk-alarm' : level === 'warning' ? 'bg-risk-warning' : 'bg-risk-normal'
-                                    }`}
-                                    style={{ width: `${Math.min(100, (peak / threshold) * 100)}%` }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      <div className="cockpit-card p-4">
-                        <h4 className="text-sm font-medium text-cockpit-text mb-3">峰值对比</h4>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between items-center py-1">
-                            <span className="text-cockpit-muted">{currentBaseSensor.name}</span>
-                            <span className="text-accent-blue font-medium">
-                              {getPeakValue(getSensorTrend(currentBaseSensor.id)).toFixed(currentBaseSensor.type === 'inclination' ? 2 : 1)} {currentBaseSensor.type === 'inclination' ? '°' : 'mm'}
-                            </span>
+                              );
+                            })}
                           </div>
-                          {compareSensors.map((sensor) => {
-                            const peak = getPeakValue(getSensorTrend(sensor.id));
-                            const data = getSensorTrend(sensor.id);
-                            const level = getRiskLevel(peak, DEFAULT_THRESHOLDS[sensor.type === 'inclination' ? 'inclination' : sensor.type]);
-                            return (
-                              <div key={sensor.id} className="flex justify-between items-center py-1">
-                                <span className="text-cockpit-muted">{sensor.name}</span>
-                                <span className={`font-medium ${
-                                  level === 'alarm' ? 'text-risk-alarm' : level === 'warning' ? 'text-risk-warning' : 'text-risk-normal'
-                                }`}>
-                                  {peak.toFixed(sensor.type === 'inclination' ? 2 : 1)} {sensor.type === 'inclination' ? '°' : 'mm'}
-                                </span>
-                              </div>
-                            );
-                          })}
                         </div>
                       </div>
                     </div>
-                  </>
-                )}
+                  );
+                })}
               </>
             )}
           </div>

@@ -116,15 +116,27 @@ export const useMonitorStore = create<MonitorStore>((set, get) => ({
   updateRecord: (id, updates) => {
     set((state) => {
       const newRecords = state.records.map((r) => (r.id === id ? { ...r, ...updates } : r));
-      savePersistedData({ records: newRecords, alarmRecords: state.alarmRecords });
-      return { records: newRecords };
+      let newAlarms = state.alarmRecords;
+
+      if (updates.status === 'completed') {
+        newAlarms = state.alarmRecords.map((a) =>
+          a.recordId === id ? { ...a, isClosed: true } : a
+        );
+      } else if (updates.status === 'pending' || updates.status === 'reviewing') {
+        newAlarms = state.alarmRecords.map((a) =>
+          a.recordId === id ? { ...a, isClosed: false } : a
+        );
+      }
+
+      savePersistedData({ records: newRecords, alarmRecords: newAlarms });
+      return { records: newRecords, alarmRecords: newAlarms };
     });
   },
 
   linkRecordToAlarm: (alarmId, recordId) => {
     set((state) => {
       const newAlarms = state.alarmRecords.map((a) =>
-        a.id === alarmId ? { ...a, recordId, isClosed: true } : a
+        a.id === alarmId ? { ...a, recordId, isClosed: false } : a
       );
       savePersistedData({ records: state.records, alarmRecords: newAlarms });
       return { alarmRecords: newAlarms };

@@ -136,7 +136,7 @@ function generateAlarmRecords(areas: PouringArea[]): AlarmRecord[] {
     if (area.status === 'alarm' || area.status === 'warning') {
       const metrics = [
         { type: 'settlement' as const, name: '立杆沉降', value: area.settlement, threshold: DEFAULT_THRESHOLDS.settlement },
-        { type: 'lateral' as const, name: '模板侧移', value: area.lateralDisplacement, threshold: DEFAULT_THRESHOLDS.lateralDisplacement },
+        { type: 'lateral' as const, name: '模板侧移', value: area.lateralDisplacement, threshold: DEFAULT_THRESHOLDS.lateral },
         { type: 'inclination' as const, name: '架体倾斜', value: area.inclination, threshold: DEFAULT_THRESHOLDS.inclination },
       ];
 

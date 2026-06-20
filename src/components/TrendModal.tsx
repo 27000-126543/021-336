@@ -35,7 +35,7 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
   const inclinationData = getInclinationTrend(area.id);
 
   const settlementLevel = getRiskLevel(area.settlement, DEFAULT_THRESHOLDS.settlement);
-  const lateralLevel = getRiskLevel(area.lateralDisplacement, DEFAULT_THRESHOLDS.lateralDisplacement);
+  const lateralLevel = getRiskLevel(area.lateralDisplacement, DEFAULT_THRESHOLDS.lateral);
   const inclinationLevel = getRiskLevel(area.inclination, DEFAULT_THRESHOLDS.inclination);
 
   const settlementRate = calculateRate(settlementData);
@@ -129,7 +129,7 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
 
     const maxMetric = Math.max(
       area.settlement / DEFAULT_THRESHOLDS.settlement.alarm,
-      area.lateralDisplacement / DEFAULT_THRESHOLDS.lateralDisplacement.alarm,
+      area.lateralDisplacement / DEFAULT_THRESHOLDS.lateral.alarm,
       area.inclination / DEFAULT_THRESHOLDS.inclination.alarm
     );
     const level: RiskLevel = maxMetric >= 1 ? 'alarm' : maxMetric >= 0.8 ? 'warning' : 'normal';
@@ -155,7 +155,9 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
     if (firstUnclosed) {
       setTimeout(() => {
         const records = useMonitorStore.getState().records;
-        const latest = records.find((r) => r.areaId === area.id);
+        const latest = records
+          .filter((r) => r.areaId === area.id)
+          .sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime())[0];
         if (latest) {
           linkRecordToAlarm(firstUnclosed.id, latest.id);
         }
@@ -370,8 +372,8 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                       data={lateralData}
                       title="模板侧移"
                       unit="mm"
-                      warningThreshold={DEFAULT_THRESHOLDS.lateralDisplacement.warning}
-                      alarmThreshold={DEFAULT_THRESHOLDS.lateralDisplacement.alarm}
+                      warningThreshold={DEFAULT_THRESHOLDS.lateral.warning}
+                      alarmThreshold={DEFAULT_THRESHOLDS.lateral.alarm}
                       level={lateralLevel}
                       height={180}
                     />
@@ -509,6 +511,12 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                               已处置
                             </span>
                           )}
+                          {!alarm.isClosed && alarm.recordId && (
+                            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-blue/20 text-accent-blue text-xs">
+                              <Clock className="w-3 h-3" />
+                              处理中
+                            </span>
+                          )}
                         </div>
                         <span className="text-xs text-cockpit-muted">
                           {formatTime(alarm.triggerTime)}
@@ -540,7 +548,7 @@ export default function TrendModal({ area, building, onClose }: TrendModalProps)
                           </div>
                         </div>
                       </div>
-                      {!alarm.isClosed && (
+                      {!alarm.isClosed && !alarm.recordId && (
                         <div className="mt-3 pt-3 border-t border-cockpit-border/30 flex justify-end">
                           <button
                             onClick={() => setShowQuickRecord(true)}

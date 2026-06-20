@@ -92,7 +92,7 @@ export default function Overview() {
           title="平均模板侧移"
           value={avgMetrics.lateral}
           unit="mm"
-          threshold={DEFAULT_THRESHOLDS.lateralDisplacement}
+          threshold={DEFAULT_THRESHOLDS.lateral}
           trend="up"
           change={0.15}
         />

@@ -15,7 +15,7 @@ export function getOverallRiskLevel(
 ): RiskLevel {
   const levels = [
     getRiskLevel(area.settlement, thresholds.settlement),
-    getRiskLevel(area.lateralDisplacement, thresholds.lateralDisplacement),
+    getRiskLevel(area.lateralDisplacement, thresholds.lateral),
     getRiskLevel(area.inclination, thresholds.inclination),
   ];
   if (levels.includes('alarm')) return 'alarm';

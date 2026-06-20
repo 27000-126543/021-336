@@ -96,7 +96,7 @@ export interface DisposalSuggestion {
 
 export interface ThresholdConfig {
   settlement: { warning: number; alarm: number };
-  lateralDisplacement: { warning: number; alarm: number };
+  lateral: { warning: number; alarm: number };
   inclination: { warning: number; alarm: number };
 }
 
@@ -110,6 +110,6 @@ export interface AlarmStat {
 
 export const DEFAULT_THRESHOLDS: ThresholdConfig = {
   settlement: { warning: 8, alarm: 15 },
-  lateralDisplacement: { warning: 5, alarm: 10 },
+  lateral: { warning: 5, alarm: 10 },
   inclination: { warning: 0.3, alarm: 0.5 },
 };

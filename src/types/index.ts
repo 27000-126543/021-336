@@ -13,6 +13,8 @@ export interface PouringArea {
   buildingId: string;
   floor: number;
   axis: string;
+  componentId: string;
+  sensorIds: string[];
   status: RiskLevel;
   settlement: number;
   lateralDisplacement: number;
@@ -23,14 +25,40 @@ export interface PouringArea {
   updateTime: string;
 }
 
-export interface SensorData {
+export interface SensorPoint {
   id: string;
+  name: string;
   componentId: string;
-  sensorId: string;
-  timestamp: string;
-  settlement: number;
-  lateralDisplacement: number;
-  inclination: number;
+  areaId: string;
+  buildingId: string;
+  type: 'settlement' | 'lateral' | 'inclination';
+  location: string;
+}
+
+export interface Component {
+  id: string;
+  name: string;
+  type: '立杆' | '模板' | '架体';
+  areaId: string;
+  buildingId: string;
+  sensorIds: string[];
+}
+
+export interface AlarmRecord {
+  id: string;
+  areaId: string;
+  buildingId: string;
+  buildingName: string;
+  floor: number;
+  axis: string;
+  metricType: 'settlement' | 'lateral' | 'inclination';
+  metricName: string;
+  value: number;
+  threshold: number;
+  level: RiskLevel;
+  triggerTime: string;
+  recordId?: string;
+  isClosed: boolean;
 }
 
 export interface TrendData {

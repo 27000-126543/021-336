@@ -1,14 +1,46 @@
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
-import type { Building, PouringArea, DisposalRecord, AlarmStat, RiskLevel } from '@/types';
+import type { Building, PouringArea, DisposalRecord, AlarmStat, RiskLevel, AlarmRecord, SensorPoint, Component } from '@/types';
 import { mockBuildings } from '@/data/mockBuildings';
-import { mockAreas } from '@/data/mockAreas';
+import { mockAreas, mockAlarmRecords, mockSensors, mockComponents } from '@/data/mockAreas';
 import { mockRecords } from '@/data/mockRecords';
+
+const STORAGE_KEY = 'high-formwork-monitor-data';
+
+interface PersistedState {
+  records: DisposalRecord[];
+  alarmRecords: AlarmRecord[];
+}
+
+function loadPersistedData(): PersistedState | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Failed to load persisted data:', e);
+  }
+  return null;
+}
+
+function savePersistedData(state: PersistedState) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.error('Failed to save persisted data:', e);
+  }
+}
+
+const persisted = loadPersistedData();
 
 interface MonitorStore {
   buildings: Building[];
   areas: PouringArea[];
   records: DisposalRecord[];
+  alarmRecords: AlarmRecord[];
+  sensors: SensorPoint[];
+  components: Component[];
   selectedBuildingId: string;
   selectedAreaId: string | null;
   currentTime: Date;
@@ -18,15 +50,23 @@ interface MonitorStore {
   selectArea: (id: string | null) => void;
   getAreaById: (id: string) => PouringArea | undefined;
   getBuildingById: (id: string) => Building | undefined;
+  getSensorById: (id: string) => SensorPoint | undefined;
+  getComponentById: (id: string) => Component | undefined;
+  getAlarmsByAreaId: (areaId: string) => AlarmRecord[];
+  getRecordsByAreaId: (areaId: string) => DisposalRecord[];
   addRecord: (record: Omit<DisposalRecord, 'id' | 'createTime'>) => void;
   updateRecord: (id: string, updates: Partial<DisposalRecord>) => void;
+  linkRecordToAlarm: (alarmId: string, recordId: string) => void;
   refreshData: () => void;
 }
 
 export const useMonitorStore = create<MonitorStore>((set, get) => ({
   buildings: mockBuildings,
   areas: mockAreas,
-  records: mockRecords,
+  records: persisted?.records || mockRecords,
+  alarmRecords: persisted?.alarmRecords || mockAlarmRecords,
+  sensors: mockSensors,
+  components: mockComponents,
   selectedBuildingId: mockBuildings[0]?.id || '',
   selectedAreaId: null,
   currentTime: new Date(),
@@ -44,19 +84,51 @@ export const useMonitorStore = create<MonitorStore>((set, get) => ({
     return get().buildings.find((b) => b.id === id);
   },
 
+  getSensorById: (id) => {
+    return get().sensors.find((s) => s.id === id);
+  },
+
+  getComponentById: (id) => {
+    return get().components.find((c) => c.id === id);
+  },
+
+  getAlarmsByAreaId: (areaId) => {
+    return get().alarmRecords.filter((a) => a.areaId === areaId);
+  },
+
+  getRecordsByAreaId: (areaId) => {
+    return get().records.filter((r) => r.areaId === areaId);
+  },
+
   addRecord: (record) => {
     const newRecord: DisposalRecord = {
       ...record,
       id: `r${Date.now()}`,
       createTime: new Date().toISOString(),
     };
-    set((state) => ({ records: [newRecord, ...state.records] }));
+    set((state) => {
+      const newRecords = [newRecord, ...state.records];
+      savePersistedData({ records: newRecords, alarmRecords: state.alarmRecords });
+      return { records: newRecords };
+    });
   },
 
   updateRecord: (id, updates) => {
-    set((state) => ({
-      records: state.records.map((r) => (r.id === id ? { ...r, ...updates } : r)),
-    }));
+    set((state) => {
+      const newRecords = state.records.map((r) => (r.id === id ? { ...r, ...updates } : r));
+      savePersistedData({ records: newRecords, alarmRecords: state.alarmRecords });
+      return { records: newRecords };
+    });
+  },
+
+  linkRecordToAlarm: (alarmId, recordId) => {
+    set((state) => {
+      const newAlarms = state.alarmRecords.map((a) =>
+        a.id === alarmId ? { ...a, recordId, isClosed: true } : a
+      );
+      savePersistedData({ records: state.records, alarmRecords: newAlarms });
+      return { alarmRecords: newAlarms };
+    });
   },
 
   refreshData: () => {
@@ -115,5 +187,20 @@ export function useAlarmStats(): AlarmStat {
 
       return { today, week, normal, warning, alarm };
     })
+  );
+}
+
+export function useAlarmsByBuilding(buildingId: string): AlarmRecord[] {
+  return useMonitorStore(
+    useShallow((state) => state.alarmRecords.filter((a) => a.buildingId === buildingId))
+  );
+}
+
+export function useRecordsByBuilding(buildingId: string): DisposalRecord[] {
+  return useMonitorStore(
+    useShallow((state) => state.records.filter((r) => {
+      const area = state.areas.find((a) => a.id === r.areaId);
+      return area?.buildingId === buildingId;
+    }))
   );
 }

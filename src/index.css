@@ -1,0 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Noto Sans SC', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: #E2E8F0;
+  background-color: #0F172A;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: 
+    radial-gradient(ellipse at top, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(ellipse at bottom right, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
+    linear-gradient(180deg, #0F172A 0%, #0C1222 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@layer components {
+  .cockpit-card {
+    @apply bg-cockpit-bg2/80 backdrop-blur-sm border border-cockpit-border/50 rounded-xl;
+  }
+
+  .cockpit-card-hover {
+    @apply hover:bg-cockpit-bg2/90 hover:border-accent-blue/30 transition-all duration-300;
+  }
+
+  .glow-border-normal {
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 0 15px rgba(16, 185, 129, 0.1);
+  }
+
+  .glow-border-warning {
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 20px rgba(245, 158, 11, 0.15);
+  }
+
+  .glow-border-alarm {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5), 0 0 25px rgba(239, 68, 68, 0.2);
+    animation: pulse-alarm 2s ease-in-out infinite;
+  }
+
+  .text-glow-normal {
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+  }
+
+  .text-glow-warning {
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+  }
+
+  .text-glow-alarm {
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.6);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 #1E293B;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: #1E293B;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #334155;
+    border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: #475569;
+  }
+}
+
+@keyframes pulse-alarm {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.5), 0 0 25px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.7), 0 0 35px rgba(239, 68, 68, 0.4);
+  }
+}
+
+@keyframes number-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
